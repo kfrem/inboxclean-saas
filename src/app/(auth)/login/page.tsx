@@ -38,6 +38,10 @@ export default function LoginPage() {
             <ul className="space-y-2 text-sm text-gray-600">
               <li className="flex items-center gap-2">
                 <span className="text-green-600">✓</span>
+                Remove auto-replies & cold outreach responses
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-green-600">✓</span>
                 Detect bounce emails
               </li>
               <li className="flex items-center gap-2">
@@ -46,11 +50,11 @@ export default function LoginPage() {
               </li>
               <li className="flex items-center gap-2">
                 <span className="text-green-600">✓</span>
-                Clean up inactive newsletters
+                Clean up inactive newsletters & spam
               </li>
               <li className="flex items-center gap-2">
                 <span className="text-green-600">✓</span>
-                Schedule automatic cleanups
+                Delete large emails to save storage
               </li>
             </ul>
           </div>

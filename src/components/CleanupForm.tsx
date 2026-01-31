@@ -16,8 +16,15 @@ export function CleanupForm() {
   const [selectedType, setSelectedType] = useState<string>('')
   const [step, setStep] = useState<'select' | 'preview' | 'execute'>('select')
   const [previewData, setPreviewData] = useState<CleanupStats | null>(null)
+  const [onlyFromStrangers, setOnlyFromStrangers] = useState<boolean>(true)
 
   const cleanupTypes = [
+    {
+      id: 'auto_replies',
+      name: 'Auto-Replies & Cold Responses',
+      description: 'Remove out-of-office and generic cold outreach replies',
+      icon: '🤖',
+    },
     {
       id: 'bounces',
       name: 'Bounce Emails',
@@ -56,7 +63,10 @@ export function CleanupForm() {
       const res = await fetch('/api/cleanup/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cleanup_type: selectedType }),
+        body: JSON.stringify({
+          cleanup_type: selectedType,
+          only_from_strangers: selectedType === 'auto_replies' ? onlyFromStrangers : undefined
+        }),
       })
 
       if (!res.ok) throw new Error('Preview failed')
@@ -75,7 +85,10 @@ export function CleanupForm() {
       const res = await fetch('/api/cleanup/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cleanup_type: selectedType }),
+        body: JSON.stringify({
+          cleanup_type: selectedType,
+          only_from_strangers: selectedType === 'auto_replies' ? onlyFromStrangers : undefined
+        }),
       })
 
       if (!res.ok) throw new Error('Execution failed')
@@ -121,6 +134,27 @@ export function CleanupForm() {
             </Card>
           ))}
         </div>
+
+        {selectedType === 'auto_replies' && (
+          <Card className="p-4 bg-blue-50 border-blue-200">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={onlyFromStrangers}
+                onChange={(e) => setOnlyFromStrangers(e.target.checked)}
+                className="mt-1 w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+              />
+              <div className="flex-1">
+                <p className="font-medium text-gray-900">
+                  Only remove from people I haven't contacted
+                </p>
+                <p className="text-sm text-gray-600 mt-1">
+                  Protects auto-replies from your actual contacts while removing junk from strangers
+                </p>
+              </div>
+            </label>
+          </Card>
+        )}
 
         <Button
           onClick={() => previewMutation.mutate()}

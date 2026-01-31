@@ -11,7 +11,7 @@ export type UserInput = z.infer<typeof userSchema>
 
 // Cleanup form validation
 export const cleanupFormSchema = z.object({
-  cleanup_type: z.enum(['bounces', 'duplicates', 'spam', 'inactive_newsletters', 'custom']),
+  cleanup_type: z.enum(['auto_replies', 'bounces', 'duplicates', 'spam', 'inactive_newsletters', 'custom']),
   dry_run: z.boolean().default(false),
   selected_folders: z.array(z.string()).optional(),
   advanced_options: z.boolean().default(false),

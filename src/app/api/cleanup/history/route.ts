@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
+import { createSupabaseServerClient } from '@/lib/supabase-server'
 
 /**
  * GET /api/cleanup/history?page=1&limit=10
@@ -9,7 +10,7 @@ import { getSession } from '@/lib/auth'
 export async function GET(req: NextRequest) {
   try {
     const session = await getSession()
-    if (!session?.userId) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -18,49 +19,35 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get('limit') || '10'), 50)
     const offset = (page - 1) * limit
 
-    // Mock data for now - in production, query the database
-    // const { data, count, error } = await db
-    //   .from('cleanup_history')
-    //   .select('*', { count: 'exact' })
-    //   .eq('user_id', session.userId)
-    //   .order('created_at', { ascending: false })
-    //   .range(offset, offset + limit - 1)
+    // Query the database with prefixed table name
+    const supabase = await createSupabaseServerClient()
+    const { data, count, error } = await supabase
+      .from('inboxclean_cleanup_history')
+      .select('*', { count: 'exact' })
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1)
 
-    const mockData = [
-      {
-        id: `cleanup-${Date.now() - 3600000}`,
-        user_id: session.userId,
-        cleanup_type: 'bounces',
-        emails_found: 47,
-        emails_deleted: 47,
-        storage_freed_mb: 12.5,
-        execution_time_seconds: 18,
-        status: 'completed',
-        created_at: new Date(Date.now() - 3600000).toISOString(),
-      },
-      {
-        id: `cleanup-${Date.now() - 86400000}`,
-        user_id: session.userId,
-        cleanup_type: 'inactive_newsletters',
-        emails_found: 234,
-        emails_deleted: 234,
-        storage_freed_mb: 89.3,
-        execution_time_seconds: 45,
-        status: 'completed',
-        created_at: new Date(Date.now() - 86400000).toISOString(),
-      },
-    ]
+    if (error) {
+      console.error('Database query error:', error)
+      return NextResponse.json(
+        { success: false, error: 'Failed to fetch cleanup history' },
+        { status: 500 }
+      )
+    }
+
+    const totalPages = count ? Math.ceil(count / limit) : 0
 
     return NextResponse.json(
       {
         success: true,
         data: {
-          cleanups: mockData,
+          cleanups: data || [],
           pagination: {
             page,
             limit,
-            total: 2,
-            pages: 1,
+            total: count || 0,
+            pages: totalPages,
           },
         },
       },

@@ -133,11 +133,135 @@ export function detectLargeEmails(
 }
 
 /**
+ * Detect auto-replies from cold outreach campaigns
+ * Targets: Out of office, automatic replies, generic cold email responses
+ * @param accessToken - Microsoft Graph API access token (required if onlyFromStrangers is true)
+ * @param onlyFromStrangers - If true, only removes auto-replies from people you haven't emailed
+ */
+export async function detectAutoReplies(
+  emails: Email[],
+  accessToken?: string,
+  onlyFromStrangers: boolean = false
+): Promise<Email[]> {
+  // Subject line patterns
+  const subjectPatterns = [
+    /^re:/i,
+    /automatic reply/i,
+    /out of office/i,
+    /auto-reply/i,
+    /away from/i,
+    /currently unavailable/i,
+    /vacation/i,
+  ]
+
+  // Common auto-reply phrases in body/subject
+  const autoReplyPhrases = [
+    'thanks for your email',
+    'thank you for reaching out',
+    'appreciate your email',
+    'i appreciate your message',
+    'thanks for getting in touch',
+    'thank you for your message',
+    'currently out of office',
+    'away from the office',
+    'will respond when i return',
+    'automatic reply',
+    'auto-reply',
+    'out of office',
+    'on vacation',
+    'limited access to email',
+  ]
+
+  // Generic scheduling/meeting responses
+  const schedulingPhrases = [
+    'book a time',
+    'schedule a call',
+    'calendar link',
+    'meeting scheduler',
+    'thanks for scheduling',
+  ]
+
+  // If user wants to protect contacts, fetch emails they've sent to
+  let sentToEmails = new Set<string>()
+  if (onlyFromStrangers && accessToken) {
+    try {
+      const sentResponse = await fetch(
+        'https://graph.microsoft.com/v1.0/me/mailFolders/SentItems/messages?$select=toRecipients&$top=1000',
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      )
+      if (sentResponse.ok) {
+        const sentData = await sentResponse.json()
+        sentData.value?.forEach((email: any) => {
+          email.toRecipients?.forEach((recipient: any) => {
+            if (recipient.emailAddress?.address) {
+              sentToEmails.add(recipient.emailAddress.address.toLowerCase())
+            }
+          })
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching sent emails:', error)
+    }
+  }
+
+  return emails.filter((email) => {
+    const subjectLower = email.subject.toLowerCase()
+    const fromLower = email.from.toLowerCase()
+
+    // Check subject patterns
+    const hasAutoReplySubject = subjectPatterns.some((pattern) =>
+      pattern.test(email.subject)
+    )
+
+    // Check for auto-reply phrases in subject
+    const hasAutoReplyPhrase = autoReplyPhrases.some((phrase) =>
+      subjectLower.includes(phrase)
+    )
+
+    // Check for scheduling tool responses
+    const hasSchedulingResponse = schedulingPhrases.some((phrase) =>
+      subjectLower.includes(phrase)
+    )
+
+    // Check if from automated systems (common patterns)
+    const isFromAutomatedSystem =
+      fromLower.includes('noreply') ||
+      fromLower.includes('no-reply') ||
+      fromLower.includes('donotreply') ||
+      fromLower.includes('automated')
+
+    const isAutoReply =
+      hasAutoReplySubject ||
+      hasAutoReplyPhrase ||
+      hasSchedulingResponse ||
+      isFromAutomatedSystem
+
+    // If not an auto-reply, exclude it
+    if (!isAutoReply) return false
+
+    // If user wants to only remove from strangers, check if we've emailed them
+    if (onlyFromStrangers && sentToEmails.size > 0) {
+      // Extract sender email address
+      const senderEmail = email.from.toLowerCase()
+      return !sentToEmails.has(senderEmail)
+    }
+
+    return true
+  })
+}
+
+/**
  * Run cleanup detection based on type
  */
 export async function runCleanupDetection(
   emails: Email[],
-  cleanupType: string
+  cleanupType: string,
+  options?: {
+    accessToken?: string
+    onlyFromStrangers?: boolean
+  }
 ): Promise<Email[]> {
   switch (cleanupType) {
     case 'bounces':
@@ -153,6 +277,12 @@ export async function runCleanupDetection(
       return detectInactiveNewsletters(emails)
     case 'large_emails':
       return detectLargeEmails(emails, 5)
+    case 'auto_replies':
+      return await detectAutoReplies(
+        emails,
+        options?.accessToken,
+        options?.onlyFromStrangers
+      )
     default:
       return []
   }

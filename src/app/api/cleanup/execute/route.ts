@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { createGraphClient } from '@/lib/graph-api'
+import { createSupabaseServerClient } from '@/lib/supabase-server'
 import {
-  detectBounceEmails,
-  detectDuplicateEmails,
-  detectInactiveNewsletters,
+  runCleanupDetection,
   calculateStorageSaved,
 } from '@/lib/cleanup-engine'
 import type { Email } from '@/types'
@@ -17,17 +16,17 @@ import type { Email } from '@/types'
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession()
-    if (!session?.accessToken) {
+    if (!session?.accessToken || !session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized - no access token' },
         { status: 401 }
       )
     }
 
-    const { cleanup_type, dry_run = false } = await req.json()
+    const { cleanup_type, dry_run = false, only_from_strangers } = await req.json()
 
     // Validate cleanup type
-    const validTypes = ['bounces', 'duplicates', 'spam', 'inactive_newsletters', 'large_emails']
+    const validTypes = ['auto_replies', 'bounces', 'duplicates', 'spam', 'inactive_newsletters', 'large_emails']
     if (!validTypes.includes(cleanup_type)) {
       return NextResponse.json(
         { error: 'Invalid cleanup type' },
@@ -54,24 +53,10 @@ export async function POST(req: NextRequest) {
     }))
 
     // Run detection
-    let emailsToDelete: Email[] = []
-
-    switch (cleanup_type) {
-      case 'bounces':
-        emailsToDelete = await detectBounceEmails(emails)
-        break
-      case 'duplicates':
-        emailsToDelete = detectDuplicateEmails(emails)
-        break
-      case 'inactive_newsletters':
-        emailsToDelete = detectInactiveNewsletters(emails)
-        break
-      case 'large_emails':
-        emailsToDelete = emails.filter((e) => (e.size_bytes || 0) > 5 * 1024 * 1024)
-        break
-      default:
-        emailsToDelete = []
-    }
+    const emailsToDelete = await runCleanupDetection(emails, cleanup_type, {
+      accessToken: session.accessToken,
+      onlyFromStrangers: only_from_strangers,
+    })
 
     const emailIds = emailsToDelete.map((e) => e.id)
     const storageSaved = calculateStorageSaved(emailsToDelete)
@@ -116,10 +101,29 @@ export async function POST(req: NextRequest) {
     }
 
     const executionTime = Math.round((Date.now() - startTime) / 1000)
-    const cleanupId = `cleanup-${Date.now()}`
 
-    // In production, save to database here
-    // await db.from('cleanup_history').insert({...})
+    // Save to database with prefixed table name
+    const supabase = await createSupabaseServerClient()
+    const { data: cleanupRecord, error: dbError } = await supabase
+      .from('inboxclean_cleanup_history')
+      .insert({
+        user_id: session.user.id,
+        cleanup_type,
+        status: 'completed',
+        emails_found: emailIds.length,
+        emails_deleted: deleted,
+        emails_failed: failed,
+        storage_freed_mb: parseFloat(storageSaved.toFixed(2)),
+        execution_time_seconds: executionTime,
+      })
+      .select()
+      .single()
+
+    if (dbError) {
+      console.error('Failed to save cleanup history:', dbError)
+    }
+
+    const cleanupId = cleanupRecord?.id || `cleanup-${Date.now()}`
 
     return NextResponse.json(
       {

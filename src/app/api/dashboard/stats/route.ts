@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
+import { createSupabaseServerClient } from '@/lib/supabase-server'
 
 /**
  * GET /api/dashboard/stats
@@ -9,15 +10,37 @@ import { getSession } from '@/lib/auth'
 export async function GET(req: NextRequest) {
   try {
     const session = await getSession()
-    if (!session?.userId) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // In production, these would come from:
-    // 1. Microsoft Graph API (inbox stats)
-    // 2. Supabase cleanup_history table (cleanup stats)
-    // 3. Email cache table (trends)
+    const supabase = await createSupabaseServerClient()
 
+    // Get cleanup stats from database
+    const { data: cleanupHistory, error: cleanupError } = await supabase
+      .from('inboxclean_cleanup_history')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: false })
+
+    if (cleanupError) {
+      console.error('Database query error:', cleanupError)
+    }
+
+    // Calculate cleanup stats from real data
+    const totalCleanups = cleanupHistory?.length || 0
+    const emailsDeleted = cleanupHistory?.reduce((sum: number, c: any) => sum + (c.emails_deleted || 0), 0) || 0
+    const storageFreed = cleanupHistory?.reduce((sum: number, c: any) => sum + (c.storage_freed_mb || 0), 0) || 0
+
+    // Get cleanups this month
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const cleanupsThisMonth = cleanupHistory?.filter((c: any) =>
+      new Date(c.created_at) >= startOfMonth
+    ).length || 0
+
+    // Inbox stats - these would come from Microsoft Graph API in production
+    // For now using mock data until Graph API is fully integrated
     const mockStats = {
       inbox: {
         total_emails: 4287,
@@ -26,10 +49,10 @@ export async function GET(req: NextRequest) {
         oldest_email_date: '2022-03-15T09:30:00Z',
       },
       cleanups: {
-        total_cleanups: 8,
-        emails_deleted: 1247,
-        storage_freed_mb: 342.8,
-        cleanups_this_month: 3,
+        total_cleanups: totalCleanups,
+        emails_deleted: emailsDeleted,
+        storage_freed_mb: parseFloat(storageFreed.toFixed(2)),
+        cleanups_this_month: cleanupsThisMonth,
       },
       categories: {
         bounces: {
@@ -89,7 +112,7 @@ export async function GET(req: NextRequest) {
       {
         success: true,
         data: {
-          user_id: session.userId,
+          user_id: session.user.id,
           timestamp: new Date().toISOString(),
           ...mockStats,
         },
