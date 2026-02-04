@@ -1,4 +1,12 @@
+'use client'
+
+import { signIn } from 'next-auth/react'
+
 export default function LoginPage() {
+  const handleSignIn = () => {
+    signIn('microsoft-entra', { callbackUrl: '/' })
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center px-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
@@ -12,6 +20,7 @@ export default function LoginPage() {
         <div className="space-y-6">
           {/* Microsoft Login Button */}
           <button
+            onClick={handleSignIn}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center gap-2"
           >
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -26,7 +35,7 @@ export default function LoginPage() {
               <div className="w-full border-t border-gray-300"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">Coming soon</span>
+              <span className="px-2 bg-white text-gray-500">Secure login</span>
             </div>
           </div>
 

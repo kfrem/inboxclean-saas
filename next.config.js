@@ -1,12 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  typescript: {
-    strictNullChecks: true,
-  },
-  swcMinify: true,
-  experimental: {
-    serverActions: true,
-  },
+  // Server actions are enabled by default in Next.js 15
+  // swcMinify is default in Next.js 15
 }
 
 module.exports = nextConfig

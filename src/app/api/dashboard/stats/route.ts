@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 
@@ -7,7 +7,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
  * Retrieve dashboard statistics for authenticated user
  * Shows inbox stats, cleanup stats, and trends
  */
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const session = await getSession()
     if (!session?.user?.id) {

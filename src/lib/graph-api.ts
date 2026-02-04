@@ -1,5 +1,3 @@
-import { NextRequest, NextResponse } from 'next/server'
-
 /**
  * Microsoft Graph API client
  * Handles all communication with Microsoft's email APIs

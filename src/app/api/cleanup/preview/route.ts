@@ -5,7 +5,7 @@ import {
   runCleanupDetection,
   calculateStorageSaved,
 } from '@/lib/cleanup-engine'
-import type { Email, ApiResponse } from '@/types'
+import type { Email } from '@/types'
 
 /**
  * POST /api/cleanup/preview
